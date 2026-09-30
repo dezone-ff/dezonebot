@@ -1,12 +1,16 @@
+const PHONE_NUMBER = "2349061100825"; // Your WhatsApp = 09061100825
+
 const express = require('express');
 const app = express();
-app.get('/', (req,res)=> res.send('Dezone Bot Online'));
-app.listen(process.env.PORT || 10000, ()=> console.log('Server running on 10000'));
+app.get('/', (req,res)=> res.send('Dezone Bot Online '+PHONE_NUMBER));
+app.listen(process.env.PORT || 10000, ()=> console.log('Server running'));
 
 const {default:makeWASocket, useMultiFileAuthState, DisconnectReason} = require('@whiskeysockets/baileys');
 const pino = require('pino');
+const fs = require('fs');
 
 async function startBot(){
+  try{ if(fs.existsSync('./auth/creds.json')==false && fs.existsSync('./auth')) fs.rmSync('./auth',{recursive:true,force:true}); }catch(e){}
   const {state, saveCreds} = await useMultiFileAuthState('./auth');
   const sock = makeWASocket({
     auth: state,
@@ -17,33 +21,25 @@ async function startBot(){
   sock.ev.on('creds.update', saveCreds);
 
   if(!sock.authState.creds.registered){
-    // Try to get pairing code with retry
-    const getCode = async () => {
-      try {
-        await new Promise(r=> setTimeout(r, 2000));
-        let code = await sock.requestPairingCode("2349061100825");
+    setTimeout(async()=>{
+      try{
+        let code = await sock.requestPairingCode(PHONE_NUMBER);
         console.log("\n==================================");
-        console.log(`YOUR PAIR CODE: ${code}`);
-        console.log("WhatsApp > Linked Devices > Link with phone number");
+        console.log(`FOR NUMBER ${PHONE_NUMBER}`);
+        console.log(`PAIR CODE: ${code}`);
+        console.log("Link within 20 seconds!");
         console.log("==================================\n");
-      } catch(e){
-        console.log("Retry pair in 5s...", e.message);
-        setTimeout(getCode, 5000);
-      }
-    };
-    getCode();
+      }catch(e){ console.log("Pair error, will retry in 10s:", e.message); setTimeout(()=>startBot(),10000); }
+    },3000);
   }
 
   sock.ev.on('connection.update', async(u)=>{
     const {connection, lastDisconnect} = u;
     console.log("Connection:", connection);
-    if(connection === 'open'){
-      console.log("✅ BOT CONNECTED - SUCCESS!");
-    }
+    if(connection === 'open') console.log("✅ CONNECTED! BOT IS ONLINE FOR", PHONE_NUMBER);
     if(connection === 'close'){
-      let reason = lastDisconnect?.error?.output?.statusCode;
-      console.log("Closed, restarting in 5s... Reason:", reason);
-      setTimeout(startBot, 5000);
+      console.log("Closed, restarting in 5s");
+      setTimeout(startBot,5000);
     }
   });
 
@@ -53,10 +49,7 @@ async function startBot(){
       let meta = await sock.groupMetadata(ev.id).catch(()=>null);
       let name = meta? meta.subject : "this group";
       for(let p of ev.participants){
-        await sock.sendMessage(ev.id, {
-          text: `*WELCOME TO ${name}* 🌟\n\nHey @${p.split('@')[0]} 👋\nWelcome! Please read pinned rules.\n\n> Dezone Bot`,
-          mentions: [p]
-        });
+        await sock.sendMessage(ev.id, { text: `*WELCOME TO ${name}* 🌟\n\nHey @${p.split('@')[0]} 👋\nWelcome! Please read pinned rules.\n\n> Dezone Bot`, mentions: [p] });
       }
     }catch(e){}
   });
