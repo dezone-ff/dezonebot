@@ -1,4 +1,3 @@
-
 const express = require('express');
 const app = express();
 app.get('/', (req,res)=> res.send('Dezone Bot Online!'));
@@ -17,20 +16,19 @@ browser: ["Dezone","Chrome","1.0"]
 })
 sock.ev.on('creds.update', saveCreds)
 
-// PAIR CODE - PUT YOUR NUMBER BELOW
 if(!sock.authState.creds.registered){
-let phone = "2348060000000" // <-- CHANGE THIS to your WhatsApp number with country code, no + or space
+let phone = "2349061100825"
 setTimeout(async()=>{
 try{
 let code = await sock.requestPairingCode(phone)
-console.log(`\nPAIR CODE FOR ${phone}: ${code} \nGo to WhatsApp > Linked Devices > Link with phone number > Enter this code`)
+console.log(`\nPAIR CODE FOR ${phone}: ${code}\nGo to WhatsApp > Linked Devices > Link with phone number > Enter this code`)
 }catch(e){console.log("Failed to get pair code:",e.message)}
 },3000)
 }
 
 sock.ev.on('connection.update', async(u)=>{
 const {connection, lastDisconnect} = u
-if(connection==='open'){ console.log("✅ BOT CONNECTED - WELCOME ACTIVE") }
+if(connection==='open'){ console.log("✅ BOT CONNECTED") }
 if(connection==='close'){
 console.log("Closed, restarting...")
 if(lastDisconnect?.error?.output?.statusCode!== 401){
@@ -50,14 +48,8 @@ text: `*WELCOME TO ${gName}* 🌟\n\nHello @${user.split('@')[0]} 👋\nPlease r
 mentions: [user]
 })
 }
-if(a.action == 'remove'){
-await sock.sendMessage(a.id,{
-text: `Goodbye @${user.split('@')[0]} 👋`,
-mentions: [user]
-})
 }
-}
-}catch(e){ console.log(e.message) }
+}catch(e){}
 })
 }
 start()
