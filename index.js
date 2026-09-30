@@ -1,3 +1,4 @@
+
 const express = require('express');
 const app = express();
 app.get('/', (req,res)=> res.send('Dezone Bot Online!'));
@@ -5,23 +6,30 @@ app.listen(3000, ()=> console.log('Server running'));
 
 const {default:makeWASocket,useMultiFileAuthState} = require('@whiskeysockets/baileys')
 const pino = require('pino')
-const qrcode = require('qrcode-terminal')
 
 async function start(){
 const {state,saveCreds} = await useMultiFileAuthState('auth')
 const sock = makeWASocket({
 auth: state,
 logger: pino({level:'silent'}),
-printQRInTerminal: true,
+printQRInTerminal: false,
 browser: ["Dezone","Chrome","1.0"]
 })
 sock.ev.on('creds.update', saveCreds)
-sock.ev.on('connection.update', async(u)=>{
-const {qr, connection, lastDisconnect} = u
-if(qr){
-qrcode.generate(qr, {small:true});
-console.log("SCAN QR ABOVE WITH WHATSAPP > LINKED DEVICES")
+
+// PAIR CODE - PUT YOUR NUMBER BELOW
+if(!sock.authState.creds.registered){
+let phone = "2348060000000" // <-- CHANGE THIS to your WhatsApp number with country code, no + or space
+setTimeout(async()=>{
+try{
+let code = await sock.requestPairingCode(phone)
+console.log(`\nPAIR CODE FOR ${phone}: ${code} \nGo to WhatsApp > Linked Devices > Link with phone number > Enter this code`)
+}catch(e){console.log("Failed to get pair code:",e.message)}
+},3000)
 }
+
+sock.ev.on('connection.update', async(u)=>{
+const {connection, lastDisconnect} = u
 if(connection==='open'){ console.log("✅ BOT CONNECTED - WELCOME ACTIVE") }
 if(connection==='close'){
 console.log("Closed, restarting...")
@@ -31,7 +39,6 @@ setTimeout(start,5000)
 }
 })
 
-// WELCOME BOT
 sock.ev.on('group-participants.update', async(a)=>{
 try{
 let gName = "Group"
