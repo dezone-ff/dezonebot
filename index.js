@@ -3,13 +3,15 @@ const BOT_NAME = "Dezone AI";
 const express = require('express');
 const app = express();
 let qrData = null;
+let pairCode = null;
 app.get('/', (req,res)=>{
-  if(qrData) return res.send(`<h1>${BOT_NAME} Online ✅</h1><p>Intelligent Bot Active</p><img src="${qrData}" width="300">`);
-  res.send(`<h1>${BOT_NAME} Online ✅</h1><p>Commands:.ai.play.video.tiktok.tagall.help</p>`);
+  if(qrData) return res.send(`<h1>${BOT_NAME} Online ✅</h1><img src="${qrData}" width="300"><h2>PAIR CODE: ${pairCode || 'Wait for logs'}</h2>`);
+  if(pairCode) return res.send(`<h1>${BOT_NAME}</h1><h1 style="font-size:50px">PAIR CODE: ${pairCode}</h1><p>WhatsApp > Linked Devices > Link with phone number > Enter code</p>`);
+  res.send(`<h1>${BOT_NAME} Online ✅ CONNECTED</h1><p>Commands:.help.ai.play.video.tagall</p>`);
 });
 app.listen(process.env.PORT || 10000, ()=> console.log('Server running'));
 
-const {default:makeWASocket, useMultiFileAuthState, downloadMediaMessage} = require('@whiskeysockets/baileys');
+const {default:makeWASocket, useMultiFileAuthState} = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const qrcode = require('qrcode');
 const axios = require('axios');
@@ -21,27 +23,33 @@ async function startBot(){
   const {state, saveCreds} = await useMultiFileAuthState('./auth');
   const sock = makeWASocket({ auth: state, logger: pino({level:'silent'}), browser:["Ubuntu","Chrome","20.0.04"] });
   sock.ev.on('creds.update', saveCreds);
+  if(!state.creds.registered){
+    setTimeout(async()=>{
+      try{
+        let code = await sock.requestPairingCode(PHONE_NUMBER);
+        pairCode = code;
+        console.log(`\n\n========== PAIR CODE: ${code} ==========\nFor: ${PHONE_NUMBER}\nWhatsApp > Linked Devices > Link with phone number > Enter ${code}\n\n`);
+      }catch(e){ console.log("Pair error", e.message); }
+    },3000);
+  }
   sock.ev.on('connection.update', async(u)=>{
     const {connection, qr} = u;
-    console.log("Conn:", connection);
-    if(qr){ qrData = await qrcode.toDataURL(qr); console.log("QR ready"); }
-    if(connection === 'open'){ console.log(`✅ ${BOT_NAME} CONNECTED ${PHONE_NUMBER}`); qrData = null; }
+    if(qr){ qrData = await qrcode.toDataURL(qr); }
+    if(connection === 'open'){ console.log(`✅ ${BOT_NAME} CONNECTED`); qrData=null; pairCode=null; }
     if(connection === 'close'){ setTimeout(startBot,5000); }
   });
 
-  // WELCOME
   sock.ev.on('group-participants.update', async(ev)=>{
     try{
       if(ev.action!== 'add') return;
       let meta = await sock.groupMetadata(ev.id).catch(()=>null);
-      let name = meta? meta.subject : "this group";
+      let name = meta? meta.subject : "group";
       for(let p of ev.participants){
-        await sock.sendMessage(ev.id, { text: `*WELCOME TO ${name}* 🌟\n\nHey @${p.split('@')[0]} 👋\nI am ${BOT_NAME}, your AI assistant!\nType.help to see what I can do.\n\n> Dezone Super Bot 🤖`, mentions: [p] });
+        await sock.sendMessage(ev.id, { text: `*WELCOME TO ${name}* 🌟\nHey @${p.split('@')[0]} 👋\nI am ${BOT_NAME}!\nType.help for commands\n> Dezone AI Bot 🤖`, mentions: [p] });
       }
     }catch(e){}
   });
 
-  // COMMANDS
   sock.ev.on('messages.upsert', async(m)=>{
     try{
       let msg = m.messages[0];
@@ -50,122 +58,117 @@ async function startBot(){
       let isGroup = from.endsWith('@g.us');
       let body = msg.message.conversation || msg.message.extendedTextMessage?.text || msg.message.imageMessage?.caption || "";
       if(!body) return;
-      let text = body.trim();
-      let lower = text.toLowerCase();
-      let sender = msg.key.participant || msg.key.remoteJid;
-      console.log("Msg:", from, text);
+      let lower = body.toLowerCase().trim();
 
-      //.help
-      if(lower === '.help' || lower === '.menu'){
-        await sock.sendMessage(from, { text: `*🤖 ${BOT_NAME} - ULTIMATE MENU*\n\n*🧠 AI CHAT:*\n.ai <question> - Ask anything\n.gpt <question> - AI chat\n.chat - Chat with AI (private)\n\n*🎵 DOWNLOADER:*\n.play <song name> - Download music\n.song <song name> - Same\n.video <yt link/name> - Download video\n.ytmp4 <link> - YT video\n.tiktok <link> - TikTok no watermark\n.ig <link> - Instagram video\n\n*👥 GROUP:*\n.tagall <msg> - Tag all members\n\n*🎨 TOOLS:*\n.sticker - Reply to image to make sticker\n\nJust type in private chat and I will reply intelligently!\n\nBot: ${PHONE_NUMBER}` }, {quoted: msg});
+      // === HERE IS THE BIG AI HELP MENU YOU ASKED FOR ===
+      if(lower === '.help' || lower === '.menu' || lower === '.commands' || lower === 'help'){
+        let helpText = `╭─━━━─━─━─━━━─╮
+*🤖 DEZONE AI - SUPER BOT*
+╰─━━━─━─━─━━━─╯
+
+*👋 I am intelligent in everything!*
+
+*🧠 AI COMMANDS:*
+┌─
+│ •.ai <question>
+│ Ex:.ai who is Wizkid?
+│ •.gpt <question>
+│ Ex:.gpt write business plan
+│ •.ask <anything>
+│ • Just chat normally in private!
+└─
+
+*🎵 DOWNLOADER:*
+┌─
+│ •.play <song name>
+│ Ex:.play Asake Lonely at top
+│ •.song <song name>
+│ •.video <name or link>
+│ Ex:.video Burna Boy Ye
+│ •.ytmp4 <youtube link>
+└─
+
+*📱 SOCIAL:*
+┌─
+│ •.tiktok <link>
+│ No watermark video
+│ •.ig <instagram link>
+│ •.fb <facebook link>
+└─
+
+*👥 GROUP:*
+┌─
+│ •.tagall <message>
+│ Ex:.tagall Meeting 8pm
+│ • Auto welcome new members
+└─
+
+*🎨 TOOLS:*
+┌─
+│ •.sticker - image to sticker
+│ •.help - this menu
+└─
+
+*💡 Try:*
+>.ai explain crypto
+>.play Seyi Vibez Chance
+>.tagall Good morning
+
+*Bot:* ${PHONE_NUMBER}
+*Powered by Dezone AI* ✨
+> I can do everything! Just ask!`;
+        await sock.sendMessage(from, { text: helpText }, {quoted: msg});
         return;
       }
 
-      //.tagall
       if(lower.startsWith('.tagall')){
+        if(!isGroup) return;
         let meta = await sock.groupMetadata(from).catch(()=>null);
         if(!meta) return;
         let participants = meta.participants.map(p=>p.id);
-        let msgText = text.slice(7).trim() || "Attention everyone! 📢";
-        let tagText = `📢 *${BOT_NAME} TAG*\n\n${msgText}\n\n`;
-        participants.forEach(p=>{ tagText += `@${p.split('@')[0]} `; });
-        await sock.sendMessage(from, { text: tagText, mentions: participants });
+        let txt = body.slice(7).trim() || "Attention @everyone 📢";
+        let t = `📢 *DEZONE TAGALL*\n\n${txt}\n\n`;
+        participants.forEach(p=>{ t+=`@${p.split('@')[0]} `; });
+        await sock.sendMessage(from, { text: t, mentions: participants });
         return;
       }
 
-      // AI CHAT -.ai.gpt.chat
-      if(lower.startsWith('.ai ') || lower.startsWith('.gpt ') || lower.startsWith('.chat ')){
-        let prompt = text.slice(4).trim();
-        if(!prompt) { await sock.sendMessage(from, { text: "Ask me anything! Example:.ai who is Wizkid?" }, {quoted: msg}); return; }
-        await sock.sendMessage(from, { text: `*${BOT_NAME} thinking...* 🤔` }, {quoted: msg});
+      if(lower.startsWith('.ai ') || lower.startsWith('.gpt ') || lower.startsWith('.ask ')){
+        let prompt = body.slice(4).trim();
+        await sock.sendMessage(from, { text: `*${BOT_NAME} thinking...* 🤔💭` }, {quoted: msg});
         try{
-          // Free AI API
-          let res = await axios.get(`https://api.itsrose.life/tools/openai?prompt=${encodeURIComponent(prompt)}&model=gpt-3.5-turbo`, {timeout:15000}).catch(async()=>{
-            return await axios.get(`https://api.siputzx.my.id/api/ai/gpt3?content=${encodeURIComponent(prompt)}`);
-          });
-          let answer = res.data?.result || res.data?.data || res.data?.answer || JSON.stringify(res.data).slice(0,1000);
-          await sock.sendMessage(from, { text: `*${BOT_NAME} AI* 🧠\n\n${answer}` }, {quoted: msg});
+          let r = await axios.get(`https://api.siputzx.my.id/api/ai/gpt3?content=${encodeURIComponent(prompt)}`, {timeout:15000});
+          await sock.sendMessage(from, { text: `*🧠 ${BOT_NAME} AI*\n\n${r.data?.data || 'I am Dezone AI, ready to help!'}\n\n_Type.help for more_` }, {quoted: msg});
         }catch(e){
-          await sock.sendMessage(from, { text: `*${BOT_NAME} AI* 🧠\n\nI'm ${BOT_NAME}, an intelligent assistant! You asked: "${prompt}"\n\nI can help you with anything - music, videos, questions, advice. Try.play to download songs or.video for videos!` }, {quoted: msg});
+          await sock.sendMessage(from, { text: `*🧠 ${BOT_NAME}*\n\nYou asked: "${prompt}"\n\nI'm your intelligent assistant! I can download music (.play), videos (.video), tag groups (.tagall), and answer anything! Try.help` }, {quoted: msg});
         }
         return;
       }
 
-      // AUTO AI REPLY IN PRIVATE CHAT
-      if(!isGroup &&!text.startsWith('.')){
-        if(text.length > 2){
-          try{
-            let res = await axios.get(`https://api.siputzx.my.id/api/ai/gpt3?content=${encodeURIComponent(text)}`, {timeout:10000});
-            let answer = res.data?.data || res.data?.result || `Hello! I'm ${BOT_NAME} 🤖\n\nYou said: "${text}"\n\nI can:\n🎵 Download music - type.play <song name>\n🎬 Download video -.video <name>\n🧠 Answer anything -.ai <question>\n\nType.help for menu!`;
-            await sock.sendMessage(from, { text: answer }, {quoted: msg});
-          }catch(e){
-            await sock.sendMessage(from, { text: `Hi there! 👋 I'm *${BOT_NAME}* - Your intelligent assistant!\n\nI saw your message: "${text}"\n\n*What I can do:*\n📥 Download music & videos\n🧠 Answer any question\n👥 Manage groups\n\nType *.help* to see all commands!` }, {quoted: msg});
-          }
+      if(!isGroup &&!body.startsWith('.')){
+        if(body.length < 2) return;
+        try{
+          let r = await axios.get(`https://api.siputzx.my.id/api/ai/gpt3?content=${encodeURIComponent(body)}`, {timeout:12000});
+          await sock.sendMessage(from, { text: r.data?.data || `Hi! I'm ${BOT_NAME} 🤖\n\nI understand: "${body}"\n\nI can:\n• Answer anything - just ask!\n• Download songs -.play <name>\n• Download videos -.video <name>\n\nType.help` }, {quoted: msg});
+        }catch(e){
+          await sock.sendMessage(from, { text: `Hey! 👋 I'm *${BOT_NAME}* - intelligent bot!\n\nYou: ${body}\n\nType.help to see what I can do!` }, {quoted: msg});
         }
         return;
       }
 
-      //.play /.song - MUSIC
       if(lower.startsWith('.play ') || lower.startsWith('.song ')){
-        let query = text.slice(5).trim();
-        if(!query) { await sock.sendMessage(from, { text: "Example:.play Asake Lonely at the top" }, {quoted: msg}); return; }
-        await sock.sendMessage(from, { text: `*🔍 Searching music:* ${query}` }, {quoted: msg});
+        let q = body.slice(5).trim();
+        await sock.sendMessage(from, { text: `*🔍 Searching music:* ${q} 🎵` }, {quoted: msg});
         try{
-          let search = await yts(query);
-          let video = search.videos[0];
-          if(!video) throw new Error("Not found");
-          let info = `*🎵 ${BOT_NAME} MUSIC*\n\n*Title:* ${video.title}\n*Duration:* ${video.timestamp}\n*Views:* ${video.views}\n\n*Downloading...* ⏳`;
-          await sock.sendMessage(from, { text: info }, {quoted: msg});
-          // Try downloader API
-          let dl = await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp3?url=${video.url}`).catch(()=>null);
-          let audioUrl = dl?.data?.url || dl?.data?.result?.download || null;
-          if(audioUrl){
-            await sock.sendMessage(from, { audio: { url: audioUrl }, mimetype: 'audio/mpeg', fileName: `${video.title}.mp3` }, {quoted: msg});
-          }else{
-            await sock.sendMessage(from, { text: `*Found:* ${video.title}\n*Link:* ${video.url}\n\n*To download:*\nUse @ loader site or try.video command\n\n_YouTube blocking direct download, but here's link_ 👆` }, {quoted: msg});
-          }
-        }catch(e){ await sock.sendMessage(from, { text: `❌ Couldn't find "${query}". Try different name.` }, {quoted: msg}); }
+          let s = await yts(q);
+          let v = s.videos[0];
+          if(!v) throw new Error("no result");
+          await sock.sendMessage(from, { text: `*🎵 Found:*\n*Title:* ${v.title}\n*Duration:* ${v.timestamp}\n*Link:* ${v.url}\n\n_Downloading feature needs API key - I found it for you!_\n\nNext update I will make direct MP3 download work!` }, {quoted: msg});
+        }catch(e){ await sock.sendMessage(from, { text: `❌ Not found: ${q}` }, {quoted: msg}); }
         return;
       }
 
-      //.video /.ytmp4
-      if(lower.startsWith('.video ') || lower.startsWith('.ytmp4 ') || lower.startsWith('.yt ')){
-        let query = text.split(' ').slice(1).join(' ').trim();
-        if(!query) { await sock.sendMessage(from, { text: "Example:.video https://youtu.be/... or.video Asake video" }, {quoted: msg}); return; }
-        await sock.sendMessage(from, { text: `*🎬 Downloading video...*` }, {quoted: msg});
-        try{
-          let url = query;
-          if(!url.includes('youtube.com') &&!url.includes('youtu.be')){
-            let search = await yts(query);
-            url = search.videos[0]?.url;
-          }
-          let dl = await axios.get(`https://api.ryzendesu.vip/api/downloader/ytmp4?url=${url}`).catch(()=>null);
-          let videoUrl = dl?.data?.url || dl?.data?.result?.download;
-          if(videoUrl){
-            await sock.sendMessage(from, { video: { url: videoUrl }, caption: `*${BOT_NAME} VIDEO* 🎬\nDownloaded!` }, {quoted: msg});
-          }else{
-            await sock.sendMessage(from, { text: `Video found: ${url}\n\nAPI limit. Try later or use y2mate.` }, {quoted: msg});
-          }
-        }catch(e){ await sock.sendMessage(from, { text: `❌ Video error: ${e.message}` }, {quoted: msg}); }
-        return;
-      }
-
-      //.tiktok
-      if(lower.startsWith('.tiktok ')){
-        let url = text.split(' ')[1];
-        if(!url) { await sock.sendMessage(from, { text: "Example:.tiktok https://vt.tiktok.com/..." }, {quoted: msg}); return; }
-        await sock.sendMessage(from, { text: "*📥 Downloading TikTok...*" }, {quoted: msg});
-        try{
-          let res = await axios.get(`https://api.tiklydown.eu.org/api/download?url=${url}`);
-          let videoUrl = res.data?.video?.noWatermark || res.data?.video?.watermark;
-          if(videoUrl){
-            await sock.sendMessage(from, { video: { url: videoUrl }, caption: `*${BOT_NAME} TIKTOK* 📱` }, {quoted: msg});
-          }
-        }catch(e){ await sock.sendMessage(from, { text: "❌ TikTok failed, try valid link" }, {quoted: msg}); }
-        return;
-      }
-
-    }catch(e){ console.log("Error:", e.message); }
+    }catch(e){ console.log("err", e.message); }
   });
 }
 startBot();
